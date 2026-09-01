@@ -1,0 +1,86 @@
+# Publishes to Maven Central when a v* tag is pushed.
+#
+# Maven Central has no OIDC trusted publishing, so unlike npm and PyPI this
+# path needs real credentials. It needs two things, and both are unavoidable:
+#
+#   GPG_SIGNING_KEY / GPG_SIGNING_PASSWORD
+#     Central requires every artifact to be signed, and the public half of the
+#     key must be on a public keyserver so it can be checked.
+#   CENTRAL_TOKEN_USERNAME / CENTRAL_TOKEN_PASSWORD
+#     A user token generated at central.sonatype.com. Not the account password.
+#
+# The bundle is uploaded to the Central Portal API directly rather than through
+# a publishing plugin, so the release path carries no third-party build plugin
+# that would have to be trusted with signed artifacts.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: release
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: The tag must match the version being published
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PROJECT="$(grep -m1 '^version = ' build.gradle.kts | cut -d'"' -f2)"
+          if [ "$TAG" != "$PROJECT" ]; then
+            echo "tag v$TAG does not match build.gradle.kts $PROJECT"
+            exit 1
+          fi
+
+      - name: Build and test
+        run: ./gradlew build
+
+      - name: Conformance must pass before anything is published
+        run: |
+          ./gradlew conformanceRunner
+          npm --prefix contract/harness install
+          npm --prefix contract/harness run conformance java
+
+      - name: Stage the signed artifacts
+        env:
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
+        run: ./gradlew publishMavenPublicationToStagingRepository
+
+      - name: Upload the bundle to the Central Portal
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+        run: |
+          cd build/staging
+          zip -qr ../bundle.zip .
+          cd ..
+          AUTH="$(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w0)"
+          # AUTOMATIC publishes once validation passes. Use USER_MANAGED to
+          # inspect the deployment in the Portal before it goes public.
+          HTTP="$(curl -sS -o response.txt -w '%{http_code}' \
+            -X POST "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC" \
+            -H "Authorization: Bearer $AUTH" \
+            -F "bundle=@bundle.zip")"
+          echo "upload: HTTP $HTTP"
+          cat response.txt
+          [ "$HTTP" = "201" ] || exit 1

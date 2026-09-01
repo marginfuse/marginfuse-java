@@ -1,0 +1,50 @@
+# Verifies the SDK against the shared contract, running the conformance suite
+# against the built jar rather than the source tree, so a broken package layout
+# fails here instead of on somebody's build.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: java ${{ matrix.java }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["11", "17", "21"]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build, plus the shared gateway vectors
+        run: ./gradlew build
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Conformance, against the built jar
+        run: |
+          ./gradlew conformanceRunner
+          npm --prefix contract/harness install
+          npm --prefix contract/harness run conformance java
