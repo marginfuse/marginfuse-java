@@ -48,6 +48,9 @@ val testJavaVersion = (findProperty("testJavaVersion") as String?)?.toInt()
 tasks.test {
     useJUnitPlatform()
     testLogging { events("failed") }
+    // So VersionTest can compare the constant against the version actually
+    // being published, which lives here and nowhere the code can read.
+    systemProperty("marginfuse.publishedVersion", project.version.toString())
     if (testJavaVersion != null) {
         javaLauncher = javaToolchains.launcherFor {
             languageVersion = JavaLanguageVersion.of(testJavaVersion)

@@ -47,7 +47,18 @@ public final class MarginFuse implements AutoCloseable {
     private static final String DEFAULT_BASE_URL = "https://api.marginfuse.com";
     private static final Duration DEFAULT_TIMEOUT = Duration.ofMillis(1500);
     private static final int TRACK_RETRIES = 3;
-    private static final String USER_AGENT = "marginfuse-java/0.1.0";
+    /**
+     * The released version of this library, as sent in the user-agent.
+     *
+     * <p>Checked against the version Gradle publishes by {@code VersionTest};
+     * a literal nobody compares to anything drifts, which is how the Node SDK
+     * came to ship two releases still reporting 0.1.0.
+     */
+    public static final String VERSION = "0.1.0";
+
+    // Package private so VersionTest can read it without the production class
+    // growing a method that exists only for tests.
+    static final String USER_AGENT = "marginfuse-java/" + VERSION;
 
     private final String apiKey;
     private final String baseUrl;
