@@ -35,9 +35,24 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
 }
 
+// Which JDK the tests execute on, as opposed to the one running Gradle.
+//
+// These are two different questions and the build used to conflate them. Gradle
+// runs on the JDK that launched it and each Gradle release supports a bounded
+// range, so pinning CI's JDK to the runtime under test caps how new a runtime
+// can be tested at whatever Gradle allows. The artifact targets Java 11 and has
+// to keep working on runtimes released long after this build file, so the test
+// JVM is selected separately here.
+val testJavaVersion = (findProperty("testJavaVersion") as String?)?.toInt()
+
 tasks.test {
     useJUnitPlatform()
     testLogging { events("failed") }
+    if (testJavaVersion != null) {
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(testJavaVersion)
+        }
+    }
 }
 
 tasks.javadoc {

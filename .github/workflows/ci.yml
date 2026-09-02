@@ -29,22 +29,42 @@ jobs:
         with:
           submodules: recursive
 
+      # Two JDKs: the runtime under test, and the one Gradle itself runs on.
+      # Gradle supports a bounded range of JDKs, so running it on the runtime
+      # under test would cap the matrix at whatever Gradle allows rather than
+      # at what this library supports. setup-java points JAVA_HOME at the last
+      # entry, so Gradle gets 21 and the matrix JDK is reached by toolchain.
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: ${{ matrix.java }}
+          java-version: |
+            ${{ matrix.java }}
+            21
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build, plus the shared gateway vectors
-        run: ./gradlew build
+      - name: Build, and run the tests on java ${{ matrix.java }}
+        # fromEnv points the toolchain at the JDK setup-java just installed.
+        # A missing one fails the build rather than quietly falling back to
+        # Gradle's own JVM, which would make this matrix a claim rather than
+        # a test.
+        run: >
+          ./gradlew build
+          -PtestJavaVersion=${{ matrix.java }}
+          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_${{ matrix.java }}_X64
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
 
-      - name: Conformance, against the built jar
+      - name: Conformance, against the built jar on java ${{ matrix.java }}
+        # The harness runs `java -jar`, so the runtime under test has to come
+        # first on PATH. Otherwise conformance would silently exercise the JDK
+        # Gradle happens to be using.
         run: |
-          ./gradlew conformanceRunner
+          export PATH="$JAVA_HOME_${{ matrix.java }}_X64/bin:$PATH"
+          java -version
+          ./gradlew conformanceRunner \
+            -Porg.gradle.java.installations.fromEnv=JAVA_HOME_${{ matrix.java }}_X64
           npm --prefix contract/harness install
           npm --prefix contract/harness run conformance java
