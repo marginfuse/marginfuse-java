@@ -14,6 +14,7 @@ public final class TrackParams {
     private final String customerId;
     private final String provider;
     private final String model;
+    private final String plan;
     private final String feature;
     private final String requestedModel;
     private final Usage usage;
@@ -38,6 +39,7 @@ public final class TrackParams {
         this.customerId = b.customerId;
         this.provider = b.provider;
         this.model = b.model;
+        this.plan = b.plan;
         this.feature = b.feature;
         this.requestedModel = b.requestedModel;
         this.usage = b.usage == null ? Usage.EMPTY : b.usage;
@@ -55,6 +57,12 @@ public final class TrackParams {
     public String customerId() { return customerId; }
     public String provider() { return provider; }
     public String model() { return model; }
+    /**
+     * The key of a plan declared in MarginFuse. A hint: a key that does not
+     * resolve is ignored rather than failing the event.
+     */
+    public String plan() { return plan; }
+
     public String feature() { return feature; }
     public String requestedModel() { return requestedModel; }
     public Usage usage() { return usage; }
@@ -70,6 +78,7 @@ public final class TrackParams {
         private String customerId;
         private String provider;
         private String model;
+        private String plan;
         private String feature;
         private String requestedModel;
         private Usage usage;
@@ -84,6 +93,7 @@ public final class TrackParams {
         public Builder customerId(String v) { this.customerId = v; return this; }
         public Builder provider(String v) { this.provider = v; return this; }
         public Builder model(String v) { this.model = v; return this; }
+        public Builder plan(String v) { this.plan = v; return this; }
         public Builder feature(String v) { this.feature = v; return this; }
         public Builder requestedModel(String v) { this.requestedModel = v; return this; }
         public Builder usage(Usage v) { this.usage = v; return this; }

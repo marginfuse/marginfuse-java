@@ -47,6 +47,9 @@ public final class MarginFuse implements AutoCloseable {
     private static final String DEFAULT_BASE_URL = "https://api.marginfuse.com";
     private static final Duration DEFAULT_TIMEOUT = Duration.ofMillis(1500);
     private static final int TRACK_RETRIES = 3;
+    // Identify is not on the request hot path - it runs at sign-in - so it
+    // gets room to answer rather than the decision budget.
+    private static final Duration IDENTIFY_TIMEOUT = Duration.ofSeconds(5);
     /**
      * The released version of this library, as sent in the user-agent.
      *
@@ -54,7 +57,7 @@ public final class MarginFuse implements AutoCloseable {
      * a literal nobody compares to anything drifts, which is how the Node SDK
      * came to ship two releases still reporting 0.1.0.
      */
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.2.0";
 
     // Package private so VersionTest can read it without the production class
     // growing a method that exists only for tests.
@@ -105,6 +108,7 @@ public final class MarginFuse implements AutoCloseable {
     public Decision decide(DecideParams params) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("customerId", params.customerId());
+        body.put("plan", params.plan());
         body.put("feature", params.feature());
         body.put("provider", params.provider());
         body.put("model", params.model());
@@ -154,6 +158,7 @@ public final class MarginFuse implements AutoCloseable {
         event.put("eventId", params.eventId() == null
                 ? "evt_" + UUID.randomUUID() : params.eventId());
         event.put("customerId", params.customerId());
+        event.put("plan", params.plan());
         event.put("feature", params.feature());
         event.put("provider", params.provider());
         event.put("model", params.model());
@@ -201,6 +206,61 @@ public final class MarginFuse implements AutoCloseable {
     public void trackAndWait(TrackParams params) {
         track(params);
         flush();
+    }
+
+    /**
+     * Tells MarginFuse who a customer is and what plan they are on.
+     *
+     * <p>{@code plan} is the key of a plan you declared in MarginFuse Settings,
+     * not a Stripe price id. MarginFuse derives that customer's revenue from
+     * the plan's price for every cycle, which is what makes margin per customer
+     * and margin policies work with no revenue source connected. Those figures
+     * are labeled as a declared price wherever they appear, because nobody
+     * confirmed collection.
+     *
+     * <p>Safe to call on every sign-in: sending the plan the customer is
+     * already on changes nothing. Sending a different one ends the current
+     * cycle at that moment and prorates what accrued.
+     *
+     * <p>Unlike {@link #track(TrackParams)}, this blocks until the server
+     * answers and reports failure. track has a safe default, retry later, and
+     * "I could not record what this customer pays" has none, because a wrong
+     * plan is a wrong margin. It still does not throw: check
+     * {@link Identity#ok()}, and the error handler is called too.
+     */
+    public Identity identify(IdentifyParams params) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("customerId", params.customerId());
+        body.put("plan", params.plan());
+        if (params.clearPlan()) body.put("clearPlan", Boolean.TRUE);
+        if (params.periodStart() != null) {
+            body.put("periodStart", DateTimeFormatter.ISO_INSTANT.format(params.periodStart()));
+        }
+        body.put("name", params.name());
+        body.put("email", params.email());
+        if (params.metadata() != null && !params.metadata().isEmpty()) {
+            body.put("metadata", params.metadata());
+        }
+
+        try {
+            HttpResponse<String> res = post("/v1/identify", body, IDENTIFY_TIMEOUT);
+            if (res.statusCode() < 200 || res.statusCode() >= 300) {
+                IOException e = new IOException("identify: HTTP " + res.statusCode());
+                report(e, "identify");
+                return new Identity(false, null, null, null, null, e.getMessage());
+            }
+            Map<String, Object> parsed = Json.readObject(res.body());
+            return new Identity(
+                    true,
+                    Json.string(parsed, "customerId"),
+                    Json.string(parsed, "plan"),
+                    Json.string(parsed, "periodStart"),
+                    Json.string(parsed, "periodEnd"),
+                    null);
+        } catch (Exception e) {
+            report(e, "identify");
+            return new Identity(false, null, null, null, null, String.valueOf(e.getMessage()));
+        }
     }
 
     /** Tells MarginFuse what your application did with a decision. */
@@ -258,6 +318,7 @@ public final class MarginFuse implements AutoCloseable {
         } catch (RuntimeException | Error e) {
             track(TrackParams.builder()
                     .customerId(params.customerId())
+                    .plan(params.plan())
                     .feature(params.feature())
                     .provider(params.provider())
                     .model(modelUsed)
@@ -273,6 +334,7 @@ public final class MarginFuse implements AutoCloseable {
 
         track(TrackParams.builder()
                 .customerId(params.customerId())
+                .plan(params.plan())
                 .feature(params.feature())
                 .provider(params.provider())
                 .model(modelUsed)

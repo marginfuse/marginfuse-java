@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.marginfuse"
-version = "0.1.0"
+version = "0.2.0"
 description = "MarginFuse server-side SDK. AI profitability guardrails: connect revenue to " +
     "per-request AI cost and stop loss-making requests before they run. Sends usage metadata " +
     "only, never prompts or responses."

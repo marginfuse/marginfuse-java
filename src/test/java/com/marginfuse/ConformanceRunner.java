@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -67,6 +68,38 @@ public final class ConformanceRunner {
                                     ((String) params.get("acknowledgment")).toUpperCase()));
                     break;
                 }
+                case "identify": {
+                    // The one call that reports failure instead of failing
+                    // open: a wrong plan is a wrong margin, so the application
+                    // has to be able to see it.
+                    IdentifyParams.Builder ib = IdentifyParams.builder()
+                            .customerId((String) params.get("customerId"))
+                            .plan((String) params.get("plan"))
+                            .clearPlan(Boolean.TRUE.equals(params.get("clearPlan")))
+                            .name((String) params.get("name"))
+                            .email((String) params.get("email"));
+                    String periodStart = (String) params.get("periodStart");
+                    if (periodStart != null) ib.periodStart(Instant.parse(periodStart));
+                    Map<String, Object> meta = map(params.get("metadata"));
+                    if (meta != null) {
+                        Map<String, String> labels = new LinkedHashMap<>();
+                        for (Map.Entry<String, Object> e : meta.entrySet()) {
+                            labels.put(e.getKey(), String.valueOf(e.getValue()));
+                        }
+                        ib.metadata(labels);
+                    }
+
+                    Identity identity = mf.identify(ib.build());
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("ok", identity.ok());
+                    result.put("customerId", identity.customerId());
+                    result.put("plan", identity.plan());
+                    result.put("periodStart", identity.periodStart());
+                    result.put("periodEnd", identity.periodEnd());
+                    result.put("error", identity.error());
+                    report.put("result", result);
+                    break;
+                }
                 case "guard": {
                     Map<String, Object> provider = map(scenario.get("provider"));
                     boolean throwsProvider = provider != null
@@ -111,6 +144,7 @@ public final class ConformanceRunner {
     private static DecideParams decideParams(Map<String, Object> p) {
         return DecideParams.builder()
                 .customerId((String) p.get("customerId"))
+                .plan((String) p.get("plan"))
                 .feature((String) p.get("feature"))
                 .provider((String) p.get("provider"))
                 .model((String) p.get("model"))
@@ -122,6 +156,7 @@ public final class ConformanceRunner {
         TrackParams.Builder b = TrackParams.builder()
                 .eventId((String) p.get("eventId"))
                 .customerId((String) p.get("customerId"))
+                .plan((String) p.get("plan"))
                 .feature((String) p.get("feature"))
                 .provider((String) p.get("provider"))
                 .model((String) p.get("model"))

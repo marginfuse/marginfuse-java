@@ -5,6 +5,7 @@ public final class DecideParams {
     private final String customerId;
     private final String provider;
     private final String model;
+    private final String plan;
     private final String feature;
     private final Usage expectedUsage;
 
@@ -21,6 +22,7 @@ public final class DecideParams {
         this.customerId = b.customerId;
         this.provider = b.provider;
         this.model = b.model;
+        this.plan = b.plan;
         this.feature = b.feature;
         this.expectedUsage = b.expectedUsage;
     }
@@ -30,6 +32,13 @@ public final class DecideParams {
     public String customerId() { return customerId; }
     public String provider() { return provider; }
     public String model() { return model; }
+
+    /**
+     * The key of a plan declared in MarginFuse. A hint: a key that does not
+     * resolve is ignored rather than failing the decision.
+     */
+    public String plan() { return plan; }
+
     public String feature() { return feature; }
     public Usage expectedUsage() { return expectedUsage; }
 
@@ -37,12 +46,14 @@ public final class DecideParams {
         private String customerId;
         private String provider;
         private String model;
+        private String plan;
         private String feature;
         private Usage expectedUsage;
 
         public Builder customerId(String v) { this.customerId = v; return this; }
         public Builder provider(String v) { this.provider = v; return this; }
         public Builder model(String v) { this.model = v; return this; }
+        public Builder plan(String v) { this.plan = v; return this; }
         public Builder feature(String v) { this.feature = v; return this; }
         public Builder expectedUsage(Usage v) { this.expectedUsage = v; return this; }
 
