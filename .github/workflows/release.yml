@@ -84,3 +84,32 @@ jobs:
           echo "upload: HTTP $HTTP"
           cat response.txt
           [ "$HTTP" = "201" ] || exit 1
+          echo "DEPLOYMENT_ID=$(cat response.txt)" >> "$GITHUB_ENV"
+
+      # 201 means Central ACCEPTED the bundle, not that it published it.
+      # Signature, checksum, POM and javadoc checks all run afterwards, so a
+      # release that stopped at the upload would report success having published
+      # nothing - and the tag would already be pushed, so the failure surfaces
+      # as "the version does not exist" days later. Wait for a terminal state.
+      - name: The deployment must reach PUBLISHED
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+        run: |
+          AUTH="$(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w0)"
+          for _ in $(seq 1 60); do
+            curl -sS -o status.json \
+              -X POST "https://central.sonatype.com/api/v1/publisher/status?id=$DEPLOYMENT_ID" \
+              -H "Authorization: Bearer $AUTH"
+            STATE="$(python3 -c 'import json,sys;print(json.load(open("status.json")).get("deploymentState",""))')"
+            echo "deployment $DEPLOYMENT_ID: $STATE"
+            case "$STATE" in
+              PUBLISHED) exit 0 ;;
+              FAILED) cat status.json; exit 1 ;;
+            esac
+            sleep 20
+          done
+          echo "Timed out waiting for the deployment to publish. It may still"
+          echo "complete; check https://central.sonatype.com/publishing/deployments"
+          cat status.json
+          exit 1
