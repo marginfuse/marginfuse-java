@@ -57,7 +57,7 @@ public final class MarginFuse implements AutoCloseable {
      * a literal nobody compares to anything drifts, which is how the Node SDK
      * came to ship two releases still reporting 0.1.0.
      */
-    public static final String VERSION = "0.2.0";
+    public static final String VERSION = "0.3.0";
 
     // Package private so VersionTest can read it without the production class
     // growing a method that exists only for tests.
@@ -311,6 +311,12 @@ public final class MarginFuse implements AutoCloseable {
 
         String modelUsed = decision.action() == Action.DOWNGRADE
                 ? decision.model() : params.model();
+        // The vendor moves with the model. A downgrade can cross providers -
+        // the server can answer an OpenAI request with an Anthropic model - and
+        // a call reported against the vendor that did not run it is priced from
+        // the wrong catalogue, which makes the saving wrong too.
+        String providerUsed = decision.action() == Action.DOWNGRADE
+                ? decision.provider() : params.provider();
 
         ProviderCall call;
         try {
@@ -320,14 +326,18 @@ public final class MarginFuse implements AutoCloseable {
                     .customerId(params.customerId())
                     .plan(params.plan())
                     .feature(params.feature())
-                    .provider(params.provider())
+                    .provider(providerUsed)
                     .model(modelUsed)
                     .requestedModel(params.model())
                     .outcome(Outcome.PROVIDER_ERROR)
                     .decisionId(decision.id())
                     .build());
             if (decision.id() != null) {
-                acknowledge(decision.id(), Acknowledgment.PROCEEDED_AS_REQUESTED);
+                // The downgrade still ran: what failed after it is the
+                // provider call, and the outcome above is what records that.
+                acknowledge(decision.id(), decision.action() == Action.DOWNGRADE
+                        ? Acknowledgment.USED_DOWNGRADE_MODEL
+                        : Acknowledgment.PROCEEDED_AS_REQUESTED);
             }
             throw e;
         }
@@ -336,7 +346,7 @@ public final class MarginFuse implements AutoCloseable {
                 .customerId(params.customerId())
                 .plan(params.plan())
                 .feature(params.feature())
-                .provider(params.provider())
+                .provider(providerUsed)
                 .model(modelUsed)
                 .requestedModel(params.model())
                 .usage(call.usage())

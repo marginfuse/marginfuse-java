@@ -16,5 +16,5 @@ public final class Contract {
      *
      * <p>See github.com/marginfuse/sdk-contract
      */
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
 }
