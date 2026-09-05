@@ -24,7 +24,7 @@ per customer, and stop loss-making requests before they run.
 Gradle:
 
 ```kotlin
-implementation("com.marginfuse:marginfuse-java:0.2.0")
+implementation("com.marginfuse:marginfuse-java:0.3.0")
 ```
 
 Maven:
@@ -33,7 +33,7 @@ Maven:
 <dependency>
   <groupId>com.marginfuse</groupId>
   <artifactId>marginfuse-java</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
@@ -122,9 +122,11 @@ must never become your outage. Transport failures go to the `onError` handler.
 
 ## Tell MarginFuse what a customer pays
 
-Margin needs a revenue side. With Stripe connected it comes from there. Without
-one, you declare your plans in MarginFuse and say which plan each customer is
-on:
+Margin needs a revenue side: Stripe for web billing, RevenueCat for App Store
+and Google Play proceeds, or declared plan prices. RevenueCat joins by App User
+ID; use that same ID in your events. Without a billing connection, declare your
+plans in MarginFuse and say which plan each customer is on. Declared revenue
+is unverified and does not confirm payment:
 
 ```java
 Identity id = mf.identify(IdentifyParams.builder()
@@ -208,7 +210,7 @@ its own traffic, with its own tests.
 Everything, and nothing else:
 
 ```
-eventId  customerId  feature  provider  model  requestedModel
+eventId  customerId  feature  provider  model  requestedModel  plan
 usage { inputTokens, outputTokens, cachedInputTokens,
         cacheCreationTokens, images, audioSeconds }
 costUsd  occurredAt  outcome  decisionId  retryOfEventId  correctsEventId
