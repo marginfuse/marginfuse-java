@@ -24,7 +24,7 @@ per customer, and stop loss-making requests before they run.
 Gradle:
 
 ```kotlin
-implementation("com.marginfuse:marginfuse-java:0.3.0")
+implementation("com.marginfuse:marginfuse-java:0.3.1")
 ```
 
 Maven:
@@ -33,7 +33,7 @@ Maven:
 <dependency>
   <groupId>com.marginfuse</groupId>
   <artifactId>marginfuse-java</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.1</version>
 </dependency>
 ```
 
@@ -87,10 +87,12 @@ GuardOutcome out = mf.guard(
         decision -> {
             // decision.model() is the one to call: a downgrade verdict changes it.
             var response = client.chat(decision.model(), messages);
+            long cached = response.cachedTokens(); // default to 0 when absent
             return ProviderCall.builder()
                     .result(response)
                     .usage(Usage.builder()
-                            .inputTokens(response.promptTokens())
+                            .inputTokens(response.promptTokens() - cached)
+                            .cachedInputTokens(cached)
                             .outputTokens(response.completionTokens())
                             .build())
                     .build();
@@ -102,6 +104,12 @@ switch (out.kind()) {
     case BLOCKED -> showLimitReached();
 }
 ```
+
+The provider client in this example is illustrative. For OpenAI usage, report
+`inputTokens = prompt_tokens - cached_tokens` and `cachedInputTokens = cached_tokens`
+(default cached tokens to zero when absent); map these fields from your provider
+client's response. The example assumes a same-provider downgrade. If policies
+can switch providers, dispatch using the decision's provider as well as its model.
 
 One call does the whole loop: ask, run with the resolved model, report the real
 cost, acknowledge what your application did.

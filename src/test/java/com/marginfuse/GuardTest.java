@@ -114,6 +114,47 @@ class GuardTest {
         assertEquals("proceeded_as_requested", only(recorder.acknowledgments));
     }
 
+    @Test
+    void malformedDecisionsFailOpenAndReportAnError() {
+        String[] bodies = {
+            "{}",
+            "{\"action\":\"unknown\"}",
+            "{\"action\":5}",
+            "{\"action\":\"downgrade\"}",
+            "{\"action\":\"downgrade\",\"model\":null}",
+            "{\"action\":\"downgrade\",\"model\":\" \"}",
+            "{\"action\":\"allow\",\"model\":123}",
+            "{\"action\":\"allow\",\"provider\":false}",
+            "{\"action\":\"allow\",\"provider\":\" \"}",
+            "{\"action\":\"allow\",\"model\":\"\"}",
+            "{\"action\":\"allow\",\"degraded\":\"false\"}",
+            "{\"action\":\"allow\",\"id\":3}"
+        };
+        for (String body : bodies) {
+            List<String> errors = new ArrayList<>();
+            try (MarginFuse mf = MarginFuse.builder().apiKey("mf_test")
+                    .httpClient(new Recorder(body))
+                    .onError((error, context) -> errors.add(context)).build()) {
+                Decision decision = mf.decide(openAiCall());
+                assertEquals(Action.ALLOW, decision.action(), body);
+                assertEquals(true, decision.degraded(), body);
+                assertEquals("gpt-4.1", decision.model(), body);
+                assertEquals("openai", decision.provider(), body);
+                assertEquals(Collections.singletonList("decide"), errors, body);
+            }
+        }
+    }
+
+    @Test
+    void blockWithoutIdStillPreventsTheProviderCall() {
+        try (MarginFuse mf = client(new Recorder("{\"action\":\"block\"}"))) {
+            GuardOutcome outcome = mf.guard(openAiCall(), decision -> {
+                throw new AssertionError("blocked provider must not run");
+            });
+            assertEquals(GuardOutcome.Kind.BLOCKED, outcome.kind());
+        }
+    }
+
     // --------------------------------------------------------------- fixture
 
     private static MarginFuse client(Recorder recorder) {

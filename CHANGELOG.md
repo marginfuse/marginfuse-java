@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.1 — 2026-09-06
+
+- Reject malformed successful decision responses, report the failure, and fail open with the original model and provider. Preserve block enforcement without an optional decision ID.
+- Pin the shared conformance suite with 34 scenarios, including malformed successful decision responses.
+- Clarify cached input token normalization and cross-provider callback routing in the integration example.
+
 ## [0.3.0]
 
 ### Fixed

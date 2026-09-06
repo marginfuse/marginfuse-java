@@ -57,7 +57,7 @@ public final class MarginFuse implements AutoCloseable {
      * a literal nobody compares to anything drifts, which is how the Node SDK
      * came to ship two releases still reporting 0.1.0.
      */
-    public static final String VERSION = "0.3.0";
+    public static final String VERSION = "0.3.1";
 
     // Package private so VersionTest can read it without the production class
     // growing a method that exists only for tests.
@@ -124,6 +124,7 @@ public final class MarginFuse implements AutoCloseable {
                 return failOpen(params, "server responded " + res.statusCode());
             }
             Map<String, Object> parsed = Json.readObject(res.body());
+            validateDecision(parsed);
             String model = Json.string(parsed, "model");
             String provider = Json.string(parsed, "provider");
             return new Decision(
@@ -381,6 +382,29 @@ public final class MarginFuse implements AutoCloseable {
     }
 
     // --------------------------------------------------------------- private
+
+    private static void validateDecision(Map<String, Object> parsed) {
+        Object action = parsed.get("action");
+        if (!java.util.Arrays.asList("allow", "block", "topup_required", "downgrade").contains(action)) {
+            throw new IllegalArgumentException("decide: invalid action");
+        }
+        for (String key : new String[] {"id", "model", "provider", "topupContext", "degradedReason"}) {
+            if (parsed.containsKey(key) && !(parsed.get(key) instanceof String)) {
+                throw new IllegalArgumentException("decide: invalid " + key);
+            }
+        }
+        if (parsed.containsKey("degraded") && !(parsed.get("degraded") instanceof Boolean)) {
+            throw new IllegalArgumentException("decide: invalid degraded");
+        }
+        for (String key : new String[] {"model", "provider"}) {
+            if (parsed.containsKey(key) && ((String) parsed.get(key)).isBlank()) {
+                throw new IllegalArgumentException("decide: blank " + key);
+            }
+        }
+        if ("downgrade".equals(action) && !parsed.containsKey("model")) {
+            throw new IllegalArgumentException("decide: downgrade requires model");
+        }
+    }
 
     private Decision failOpen(DecideParams params, String reason) {
         return new Decision(null, Action.ALLOW, params.model(), params.provider(),
